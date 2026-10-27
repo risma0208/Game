@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Chibi Fantasy Town 3D</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #0d1117;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        #webgl-container {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* Modal Pemilihan Karakter */
+        #character-select-modal {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 23, 42, 0.92);
+            backdrop-filter: blur(8px);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            color: white;
+        }
+        .modal-title {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: #f1f5f9;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+        }
+        .cards-container {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+        .char-card {
+            background: rgba(255, 255, 255, 0.08);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 16px;
+            padding: 15px;
+            width: 100px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .char-card.selected {
+            border-color: #38bdf8;
+            background: rgba(56, 189, 248, 0.25);
+            transform: scale(1.08);
+            box-shadow: 0 0 15px rgba(56, 189, 248, 0.5);
+        }
+        .char-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            margin: 0 auto 10px;
+        }
+        .char-name {
+            font-size: 14px;
+            font-weight: 600;
+        }
+        .btn-start {
+            background: linear-gradient(135deg, #38bdf8, #3b82f6);
+            color: white;
+            border: none;
+            padding: 12px 35px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 25px;
+            box-shadow: 0 4px 15px rgba(56, 189, 248, 0.4);
+            cursor: pointer;
+        }
+
+        /* JoyStick & Control UI untuk HP */
+        #joystick-zone {
+            position: absolute;
+            bottom: 30px;
+            left: 30px;
+            width: 120px;
+            height: 120px;
+            background: rgba(255, 255, 255, 0.15);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            touch-action: none;
+            display: none;
+        }
+        #joystick-knob {
+            position: absolute;
+            top: 35px;
+            left: 35px;
+            width: 50px;
+            height: 50px;
+            background: #38bdf8;
+            border-radius: 50%;
+            box-shadow: 0 0 10px rgba(56, 189, 248, 0.8);
+        }
+        #btn-jump {
+            position: absolute;
+            bottom: 40px;
+            right: 30px;
+            width: 65px;
+            height: 65px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            border-radius: 50%;
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(4px);
+        }
+
+        /* Top HUD */
+        #hud {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            color: white;
+            font-size: 14px;
+            background: rgba(0,0,0,0.4);
+            padding: 8px 15px;
+            border-radius: 20px;
+            backdrop-filter: blur(4px);
+            display: none;
+        }
+    </style>
+
+    <!-- Three.js Library via CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+    <div id="webgl-container"></div>
+
+    <!-- UI Modal Pilih Karakter -->
+    <div id="character-select-modal">
+        <div class="modal-title">Pilih Karakter Chibi</div>
+        <div class="cards-container">
+            <div class="char-card selected" onclick="selectChar(0)">
+                <div class="char-avatar" style="background:#ff7675;"></div>
+                <div class="char-name">Chibi Red</div>
+            </div>
+            <div class="char-card" onclick="selectChar(1)">
+                <div class="char-avatar" style="background:#74b9ff;"></div>
+                <div class="char-name">Chibi Blue</div>
+            </div>
+            <div class="char-card" onclick="selectChar(2)">
+                <div class="char-avatar" style="background:#55efc4;"></div>
+                <div class="char-name">Chibi Mint</div>
+            </div>
+        </div>
+        <button class="btn-start" onclick="startGame()">Masuk Kota 🏰</button>
+    </div>
+
+    <!-- Controls UI -->
+    <div id="hud">🏰 Bazecamp Town | Player: <span id="player-label">Chibi Red</span></div>
+    <div id="joystick-zone">
+        <div id="joystick-knob"></div>
+    </div>
+    <div id="btn-jump">LOMPAT</div>
+
+    <script>
+        // Data Karakter
+        const characters = [
+            { name: "Chibi Red", color: 0xff7675, hatColor: 0xd63031 },
+            { name: "Chibi Blue", color: 0x74b9ff, hatColor: 0x0984e3 },
+            { name: "Chibi Mint", color: 0x55efc4, hatColor: 0x00b894 }
+        ];
+        let selectedCharIdx = 0;
+
+        // Three.js Setup Variables
+        let scene, camera, renderer;
+        let playerGroup, playerBody, headMesh, hatMesh;
+        let moveData = { x: 0, y: 0 };
+        let isJumping = false, jumpVelocity = 0;
+        const gravity = -0.015;
+
+        function selectChar(idx) {
+            selectedCharIdx = idx;
+            document.querySelectorAll('.char-card').forEach((card, i) => {
+                if (i === idx) card.classList.add('selected');
+                else card.classList.remove('selected');
+            });
+        }
+
+        function startGame() {
+            document.getElementById('character-select-modal').style.display = 'none';
+            document.getElementById('joystick-zone').style.display = 'block';
+            document.getElementById('btn-jump').style.display = 'flex';
+            document.getElementById('hud').style.display = 'block';
+            document.getElementById('player-label').innerText = characters[selectedCharIdx].name;
+
+            init3DScene();
+            createTownEnvironment();
+            createChibiPlayer();
+            setupControls();
+            animate();
+        }
+
+        function init3DScene() {
+            const container = document.getElementById('webgl-container');
+            
+            // Scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87ceeb); // Langit siang cerah
+            scene.fog = new THREE.FogExp2(0x87ceeb, 0.015);
+
+            // Camera (Isometric / Third Person view)
+            camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+            
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const sunLight = new THREE.DirectionalLight(0xfff5e6, 0.9);
+            sunLight.position.set(40, 60, 20);
+            sunLight.castShadow = true;
+            sunLight.shadow.mapSize.width = 1024;
+            sunLight.shadow.mapSize.height = 1024;
+            sunLight.shadow.camera.near = 0.5;
+            sunLight.shadow.camera.far = 150;
+            const d = 40;
+            sunLight.shadow.camera.left = -d;
+            sunLight.shadow.camera.right = d;
+            sunLight.shadow.camera.top = d;
+            sunLight.shadow.camera.bottom = -d;
+            scene.add(sunLight);
+
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        // Membuat Peta Kota Abad Pertengahan
+        function createTownEnvironment() {
+            // Rumput Dasar
+            const groundGeo = new THREE.PlaneGeometry(120, 120);
+            const groundMat = new THREE.MeshLambertMaterial({ color: 0x55efc4 });
+            const ground = new THREE.Mesh(groundGeo, groundMat);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            // Jalan Setapak Batu Lingkaran Pusat
+            const roadGeo = new THREE.RingGeometry(2, 16, 32);
+            const roadMat = new THREE.MeshLambertMaterial({ color: 0xbdc3c7, side: THREE.DoubleSide });
+            const road = new THREE.Mesh(roadGeo, roadMat);
+            road.rotation.x = -Math.PI / 2;
+            road.position.y = 0.01;
+            road.receiveShadow = true;
+            scene.add(road);
+
+            // Api Unggun di Tengah Square
+            const firePitGeo = new THREE.CylinderGeometry(1.5, 1.8, 0.4, 12);
+            const firePitMat = new THREE.MeshLambertMaterial({ color: 0x7f8c8d });
+            const firePit = new THREE.Mesh(firePitGeo, firePitMat);
+            firePit.position.set(0, 0.2, 0);
+            firePit.castShadow = true;
+            scene.add(firePit);
+
+            // Api (Cone Oren)
+            const fireGeo = new THREE.ConeGeometry(0.8, 1.5, 8);
+            const fireMat = new THREE.MeshBasicMaterial({ color: 0xff7675 });
+            const fire = new THREE.Mesh(fireGeo, fireMat);
+            fire.position.set(0, 1, 0);
+            scene.add(fire);
+
+            // Cahaya Api Unggun
+            const fireLight = new THREE.PointLight(0xff7675, 2, 15);
+            fireLight.position.set(0, 1.5, 0);
+            scene.add(fireLight);
+
+            // Kastil Utamadi Belakang
+            createCastle(0, 0, -35);
+
+            // Rumah-rumah Kayu Abad Pertengahan di Sekitar
+            const housePositions = [
+                {x: -20, z: -15}, {x: -28, z: -5}, {x: -22, z: 10},
+                {x: 20, z: -15}, {x: 28, z: -5}, {x: 22, z: 10}
+            ];
+            housePositions.forEach(pos => createMedievalHouse(pos.x, pos.z));
+
+            // Danau Kecil di Samping
+            const lakeGeo = new THREE.CircleGeometry(12, 32);
+            const lakeMat = new THREE.MeshLambertMaterial({ color: 0x74b9ff });
+            const lake = new THREE.Mesh(lakeGeo, lakeMat);
+            lake.rotation.x = -Math.PI / 2;
+            lake.position.set(28, 0.02, 22);
+            scene.add(lake);
+
+            // Benteng Pagar Keliling Kota
+            createTownWalls();
+        }
+
+        function createCastle(x, y, z) {
+            const castleGroup = new THREE.Group();
+            
+            // Gedung Utama
+            const mainGeo = new THREE.BoxGeometry(20, 12, 12);
+            const mainMat = new THREE.MeshLambertMaterial({ color: 0x95a5a6 });
+            const mainBuilding = new THREE.Mesh(mainGeo, mainMat);
+            mainBuilding.position.y = 6;
+            mainBuilding.castShadow = true;
+            castleGroup.add(mainBuilding);
+
+            // Menara Kiri & Kanan
+            const towerGeo = new THREE.CylinderGeometry(3, 3, 16, 12);
+            const towerMat = new THREE.MeshLambertMaterial({ color: 0x7f8c8d });
+            
+            const towerLeft = new THREE.Mesh(towerGeo, towerMat);
+            towerLeft.position.set(-10, 8, 4);
+            towerLeft.castShadow = true;
+            castleGroup.add(towerLeft);
+
+            const towerRight = new THREE.Mesh(towerGeo, towerMat);
+            towerRight.position.set(10, 8, 4);
+            towerRight.castShadow = true;
+            castleGroup.add(towerRight);
+
+            // Atap Kerucut Menara
+            const roofGeo = new THREE.ConeGeometry(4, 5, 12);
+            const roofMat = new THREE.MeshLambertMaterial({ color: 0x2c3e50 });
+            
+            const roofLeft = new THREE.Mesh(roofGeo, roofMat);
+            roofLeft.position.set(-10, 18.5, 4);
+            castleGroup.add(roofLeft);
+
+            const roofRight = new THREE.Mesh(roofGeo, roofMat);
+            roofRight.position.set(10, 18.5, 4);
+            castleGroup.add(roofRight);
+
+            castleGroup.position.set(x, y, z);
+            scene.add(castleGroup);
+        }
+
+        function createMedievalHouse(x, z) {
+            const houseGroup = new THREE.Group();
+
+            // Tembok Rumah
+            const bodyGeo = new THREE.BoxGeometry(6, 4, 6);
+            const bodyMat = new THREE.MeshLambertMaterial({ color: 0xfdfe3a6 });
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.position.y = 2;
+            body.castShadow = true;
+            houseGroup.add(body);
+
+            // Atap
+            const roofGeo = new THREE.ConeGeometry(5, 3, 4);
+            const roofMat = new THREE.MeshLambertMaterial({ color: 0xd63031 });
+            const roof = new THREE.Mesh(roofGeo, roofMat);
+            roof.position.y = 5.5;
+            roof.rotation.y = Math.PI / 4;
+            roof.castShadow = true;
+            houseGroup.add(roof);
+
+            houseGroup.position.set(x, 0, z);
+            scene.add(houseGroup);
+        }
+
+        function createTownWalls() {
+            const wallMat = new THREE.MeshLambertMaterial({ color: 0x636e72 });
+            const wallGeo = new THREE.BoxGeometry(110, 5, 2);
+
+            // Pagar Belakang
+            const backWall = new THREE.Mesh(wallGeo, wallMat);
+            backWall.position.set(0, 2.5, -55);
+            scene.add(backWall);
+
+            // Pagar Kiri
+            const leftWall = new THREE.Mesh(wallGeo, wallMat);
+            leftWall.rotation.y = Math.PI / 2;
+            leftWall.position.set(-55, 2.5, 0);
+            scene.add(leftWall);
+
+            // Pagar Kanan
+            const rightWall = new THREE.Mesh(wallGeo, wallMat);
+            rightWall.rotation.y = Math.PI / 2;
+            rightWall.position.set(55, 2.5, 0);
+            scene.add(rightWall);
+        }
+
+        // Bikin Karakter Chibi 3D (Proporsi Kepala Besar + Badan Kecil)
+        function createChibiPlayer() {
+            playerGroup = new THREE.Group();
+            const charData = characters[selectedCharIdx];
+
+            // 1. Badan Chibi (Kecil)
+            const bodyGeo = new THREE.CylinderGeometry(0.4, 0.3, 0.9, 12);
+            const bodyMat = new THREE.MeshLambertMaterial({ color: charData.color });
+            playerBody = new THREE.Mesh(bodyGeo, bodyMat);
+            playerBody.position.y = 0.75;
+            playerBody.castShadow = true;
+            playerGroup.add(playerBody);
+
+            // 2. Kepala Chibi (Besar & Bulat)
+            const headGeo = new THREE.SphereGeometry(0.65, 16, 16);
+            const headMat = new THREE.MeshLambertMaterial({ color: 0xffeaa7 }); // Skin tone
+            headMesh = new THREE.Mesh(headGeo, headMat);
+            headMesh.position.y = 1.6;
+            headMesh.castShadow = true;
+            playerGroup.add(headMesh);
+
+            // 3. Mata Chibi (Anime Style)
+            const eyeGeo = new THREE.SphereGeometry(0.08, 8, 8);
+            const eyeMat = new THREE.MeshBasicMaterial({ color: 0x2d3436 });
+            
+            const eyeLeft = new THREE.Mesh(eyeGeo, eyeMat);
+            eyeLeft.position.set(-0.22, 1.65, 0.58);
+            playerGroup.add(eyeLeft);
+
+            const eyeRight = new THREE.Mesh(eyeGeo, eyeMat);
+            eyeRight.position.set(0.22, 1.65, 0.58);
+            playerGroup.add(eyeRight);
+
+            // 4. Topi Lucu
+            const hatGeo = new THREE.ConeGeometry(0.5, 0.6, 12);
+            const hatMat = new THREE.MeshLambertMaterial({ color: charData.hatColor });
+            hatMesh = new THREE.Mesh(hatGeo, hatMat);
+            hatMesh.position.set(0, 2.3, 0);
+            hatMesh.castShadow = true;
+            playerGroup.add(hatMesh);
+
+            playerGroup.position.set(0, 0, 10); // Start di depan api unggun
+            scene.add(playerGroup);
+        }
+
+        // Setup Touch Controls (Virtual Joystick untuk HP & Keyboard untuk Laptop)
+        function setupControls() {
+            const joystickZone = document.getElementById('joystick-zone');
+            const joystickKnob = document.getElementById('joystick-knob');
+            let touchId = null;
+            let center = { x: 0, y: 0 };
+
+            joystickZone.addEventListener('touchstart', (e) => {
+                const touch = e.changedTouches[0];
+                touchId = touch.identifier;
+                const rect = joystickZone.getBoundingClientRect();
+                center = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+                updateJoystick(touch);
+            });
+
+            joystickZone.addEventListener('touchmove', (e) => {
+                for (let touch of e.changedTouches) {
+                    if (touch.identifier === touchId) {
+                        updateJoystick(touch);
+                    }
+                }
+            });
+
+            const resetJoystick = () => {
+                touchId = null;
+                moveData = { x: 0, y: 0 };
+                joystickKnob.style.left = '35px';
+                joystickKnob.style.top = '35px';
+            };
+
+            joystickZone.addEventListener('touchend', resetJoystick);
+            joystickZone.addEventListener('touchcancel', resetJoystick);
+
+            function updateJoystick(touch) {
+                const dx = touch.clientX - center.x;
+                const dy = touch.clientY - center.y;
+                const dist = Math.min(Math.sqrt(dx * dx + dy * dy), 40);
+                const angle = Math.atan2(dy, dx);
+
+                const knobX = 35 + Math.cos(angle) * dist;
+                const knobY = 35 + Math.sin(angle) * dist;
+
+                joystickKnob.style.left = `${knobX}px`;
+                joystickKnob.style.top = `${knobY}px`;
+
+                moveData.x = (Math.cos(angle) * dist) / 40;
+                moveData.y = (Math.sin(angle) * dist) / 40;
+            }
+
+            // Tombol Jump
+            document.getElementById('btn-jump').addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                doJump();
+            });
+
+            // Keyboard Fallback (Arrow Keys / WASD)
+            window.addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowUp' || e.key === 'w') moveData.y = -1;
+                if (e.key === 'ArrowDown' || e.key === 's') moveData.y = 1;
+                if (e.key === 'ArrowLeft' || e.key === 'a') moveData.x = -1;
+                if (e.key === 'ArrowRight' || e.key === 'd') moveData.x = 1;
+                if (e.key === ' ' || e.key === 'Spacebar') doJump();
+            });
+
+            window.addEventListener('keyup', (e) => {
+                if (['ArrowUp','ArrowDown','w','s'].includes(e.key)) moveData.y = 0;
+                if (['ArrowLeft','ArrowRight','a','d'].includes(e.key)) moveData.x = 0;
+            });
+        }
+
+        function doJump() {
+            if (!isJumping) {
+                isJumping = true;
+                jumpVelocity = 0.25;
+            }
+        }
+
+        // Loop Animasi Game
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Pergerakan Player
+            if (moveData.x !== 0 || moveData.y !== 0) {
+                const speed = 0.15;
+                playerGroup.position.x += moveData.x * speed;
+                playerGroup.position.z += moveData.y * speed;
+
+                // Memutar arah hadap karakter sesuai pergerakan
+                const targetAngle = Math.atan2(moveData.x, moveData.y);
+                playerGroup.rotation.y = targetAngle;
+
+                // Animasi Goyang Chibi saat jalan
+                const walkCycle = Math.sin(Date.now() * 0.01) * 0.1;
+                playerBody.rotation.z = walkCycle;
+                headMesh.rotation.z = walkCycle * 0.5;
+            } else {
+                playerBody.rotation.z = 0;
+                headMesh.rotation.z = 0;
+            }
+
+            // Gravitasi & Lompat
+            if (isJumping) {
+                playerGroup.position.y += jumpVelocity;
+                jumpVelocity += gravity;
+                if (playerGroup.position.y <= 0) {
+                    playerGroup.position.y = 0;
+                    isJumping = false;
+                }
+            }
+
+            // Batasi karakter agar tidak keluar pagar benteng
+            playerGroup.position.x = Math.max(-50, Math.min(50, playerGroup.position.x));
+            playerGroup.position.z = Math.max(-50, Math.min(50, playerGroup.position.z));
+
+            // Kamera mengikuti karakter (Third-person Smooth Camera Follow)
+            camera.position.x = playerGroup.position.x;
+            camera.position.y = playerGroup.position.y + 12;
+            camera.position.z = playerGroup.position.z + 18;
+            camera.lookAt(playerGroup.position.x, playerGroup.position.y + 1, playerGroup.position.z);
+
+            renderer.render(scene, camera);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+    </script>
+</body>
+</html>
